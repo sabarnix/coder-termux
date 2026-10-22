@@ -1,0 +1,51 @@
+#!/data/data/com.termux/files/usr/bin/bash
+# mosh-coder: start mosh-server on a coder workspace, tunnel its UDP port
+# through `coder port-forward --udp`, and attach a local mosh-client.
+set -eu
+
+HOST="${1:-}"
+if [ -z "$HOST" ]; then
+  echo "usage: mosh-coder <workspace-name>" >&2
+  exit 2
+fi
+WORKSPACE="${HOST%.coder}"
+SSH_HOST="${WORKSPACE}.coder"
+
+PORT=$((60200 + RANDOM % 100))
+
+REMOTE_CMD='mosh-server new -s -p '"$PORT"' -- /home/coder/.local/bin/tmux new -A -s wrk'
+MOSH_OUT=$(ssh -o LogLevel=QUIET "$SSH_HOST" "$REMOTE_CMD" 2>&1) || {
+  echo "mosh-server failed on $SSH_HOST:" >&2
+  echo "$MOSH_OUT" >&2
+  exit 1
+}
+LINE=$(printf '%s\n' "$MOSH_OUT" | grep -E '^MOSH CONNECT ' | head -1 || true)
+if [ -z "$LINE" ]; then
+  echo "no MOSH CONNECT line from mosh-server; raw output:" >&2
+  echo "$MOSH_OUT" >&2
+  exit 1
+fi
+MOSH_PORT=$(printf '%s' "$LINE" | awk '{print $3}')
+MOSH_KEY=$(printf '%s' "$LINE" | awk '{print $4}')
+
+PF_LOG=$(mktemp "$HOME/.mosh-coder-pf.XXXXXX")
+trap 'rm -f "$PF_LOG"' EXIT
+
+coder port-forward "$WORKSPACE" --udp "${MOSH_PORT}:${MOSH_PORT}" >"$PF_LOG" 2>&1 &
+PF_PID=$!
+trap 'kill "$PF_PID" 2>/dev/null; wait "$PF_PID" 2>/dev/null; rm -f "$PF_LOG"' EXIT INT TERM
+
+for _ in $(seq 1 40); do
+  if grep -q 'Ready!' "$PF_LOG" 2>/dev/null; then
+    break
+  fi
+  if ! kill -0 "$PF_PID" 2>/dev/null; then
+    echo "coder port-forward exited early:" >&2
+    cat "$PF_LOG" >&2
+    exit 1
+  fi
+  sleep 0.25
+done
+
+export MOSH_KEY
+exec mosh-client 127.0.0.1 "$MOSH_PORT"
