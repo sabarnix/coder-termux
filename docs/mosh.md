@@ -31,3 +31,12 @@ through Coder's native tunnel without relying on direct UDP reachability.
 ```sh
 mosh-coder <workspace-name>
 ```
+
+To launch a specific command inside the Mosh session (tmux, screen, etc.),
+set `MOSH_REMOTE_SHELL`:
+
+```sh
+MOSH_REMOTE_SHELL='tmux new -A -s wrk' mosh-coder <workspace-name>
+```
+
+The default runs the user's login shell on the remote.

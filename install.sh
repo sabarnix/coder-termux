@@ -17,7 +17,8 @@
 # Env knobs:
 #   REPO                override "sabarnix/coder-termux"
 #   RELEASE_TAG         pin a release (default: "latest")
-#   CODER_URL           skip the login prompt and use this deployment URL
+#   CODER_URL           skip the URL prompt and use this deployment URL
+#   CODER_SESSION_TOKEN with CODER_URL, log in non-interactively (no prompt)
 #   SKIP_LOGIN=1        skip `coder login` entirely (assume ~/.config/coderv2 exists)
 #   SKIP_CONFIG_SSH=1   skip `coder config-ssh`
 set -eu
@@ -37,13 +38,15 @@ die() { printf 'error: %s\n' "$*" >&2; exit 1; }
 [ -n "${PREFIX:-}" ] && [ -d "$PREFIX/bin" ] \
   || die "\$PREFIX is unset or missing — are you really in Termux?"
 
-say "installing termux packages (openssh curl jq)"
+say "installing termux packages (openssh curl jq mosh)"
+# openssh provides ssh; mosh provides mosh-client for the mosh-coder wrapper.
 need_pkg=0
-for p in openssh curl jq; do
-  command -v "$p" >/dev/null 2>&1 || need_pkg=1
-done
+command -v ssh >/dev/null 2>&1 || need_pkg=1
+command -v curl >/dev/null 2>&1 || need_pkg=1
+command -v jq >/dev/null 2>&1 || need_pkg=1
+command -v mosh-client >/dev/null 2>&1 || need_pkg=1
 if [ "$need_pkg" = 1 ]; then
-  pkg install -y openssh curl jq >/dev/null
+  pkg install -y openssh curl jq mosh >/dev/null
 fi
 
 say "resolving release $RELEASE_TAG from $REPO"
@@ -83,15 +86,32 @@ install -m 755 "$tmp/mosh-coder" "$PREFIX/bin/mosh-coder"
 if [ "${SKIP_LOGIN:-0}" != 1 ]; then
   if [ -f "$HOME/.config/coderv2/session" ] && [ -s "$HOME/.config/coderv2/url" ]; then
     say "coder session already present at ~/.config/coderv2 (skipping login)"
+  elif [ -n "${CODER_URL:-}" ] && [ -n "${CODER_SESSION_TOKEN:-}" ]; then
+    say "writing non-interactive session from CODER_URL and CODER_SESSION_TOKEN"
+    mkdir -p "$HOME/.config/coderv2"
+    chmod 700 "$HOME/.config/coderv2"
+    printf '%s' "$CODER_URL" > "$HOME/.config/coderv2/url"
+    printf '%s' "$CODER_SESSION_TOKEN" > "$HOME/.config/coderv2/session"
+    chmod 600 "$HOME/.config/coderv2/url" "$HOME/.config/coderv2/session"
   else
+    # Under `curl | bash`, stdin is the pipe; use /dev/tty for interactive IO.
+    if [ ! -r /dev/tty ]; then
+      die "no CODER_URL/CODER_SESSION_TOKEN and no terminal available.
+Pipe install detected without /dev/tty. Either:
+  (a) rerun with: CODER_URL=https://... CODER_SESSION_TOKEN=... bash install.sh
+  (b) download first, then run: curl -fsSLO .../install.sh && bash install.sh
+  (c) skip login: SKIP_LOGIN=1 (assumes ~/.config/coderv2 already exists)"
+    fi
     url="${CODER_URL:-}"
-    if [ -z "$url" ] && [ -t 0 ]; then
-      printf 'Coder deployment URL (e.g. https://coder.example.com): '
-      read -r url
+    if [ -z "$url" ]; then
+      printf 'Coder deployment URL (e.g. https://coder.example.com): ' > /dev/tty
+      read -r url < /dev/tty
     fi
     [ -n "$url" ] || die "no CODER_URL provided — rerun with CODER_URL=... or SKIP_LOGIN=1"
     say "running: coder login $url"
-    coder login "$url"
+    say "when prompted, open the printed URL in a browser, copy the session"
+    say "token, and paste it back into this terminal."
+    coder login "$url" < /dev/tty > /dev/tty
   fi
 fi
 
