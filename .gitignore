@@ -8,3 +8,5 @@ coder
 coder-tls64
 coder-pie
 coder-notls
+# release asset staging (uploaded via `gh release create`)
+_asset-*

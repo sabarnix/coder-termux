@@ -34,18 +34,28 @@ The patch set addresses all three.
 
 ## Install
 
-Prebuilt binary + session on the device at `/sdcard/Download/coder-native/`:
+One-liner, from a fresh Termux shell:
 
 ```sh
-bash /sdcard/Download/coder-native/setup.sh
+curl -fsSL https://raw.githubusercontent.com/sabarnix/coder-termux/main/install.sh | bash
 ```
 
-That script copies the staged binary to `$PREFIX/bin/coder`, drops the Coder
-session file into `~/.config/coderv2/`, and runs `coder config-ssh --yes
---coder-binary-path "$PREFIX/bin/coder"` to write a working `~/.ssh/config`
-block.
+The script installs `openssh`/`curl`/`jq`, downloads the pinned PIE arm64
+`coder` binary from the GitHub release (sha256-verified), drops the
+`mosh-coder` wrapper into `$PREFIX/bin`, runs `coder login` to collect your
+deployment URL and session, and writes `~/.ssh/config` with
+`coder config-ssh --yes --coder-binary-path "$PREFIX/bin/coder"`.
 
-For a reinstall after rebuilding, use `install/reinstall.sh`.
+You can preseed the URL or skip steps with env vars:
+
+```sh
+CODER_URL=https://your-deployment \
+  curl -fsSL https://raw.githubusercontent.com/sabarnix/coder-termux/main/install.sh | bash
+```
+
+See `install.sh` for all knobs (`REPO`, `RELEASE_TAG`, `SKIP_LOGIN`,
+`SKIP_CONFIG_SSH`). For a reinstall after rebuilding, use
+`install/reinstall.sh`.
 
 ## Usage
 
