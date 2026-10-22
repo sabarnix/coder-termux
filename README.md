@@ -40,22 +40,29 @@ One-liner, from a fresh Termux shell:
 curl -fsSL https://raw.githubusercontent.com/sabarnix/coder-termux/main/install.sh | bash
 ```
 
-The script installs `openssh`/`curl`/`jq`, downloads the pinned PIE arm64
-`coder` binary from the GitHub release (sha256-verified), drops the
-`mosh-coder` wrapper into `$PREFIX/bin`, runs `coder login` to collect your
-deployment URL and session, and writes `~/.ssh/config` with
+The script installs `openssh`/`curl`/`jq`/`mosh`, downloads the pinned PIE
+arm64 `coder` binary from the GitHub release (sha256-verified), drops the
+`mosh-coder` wrapper into `$PREFIX/bin`, runs `coder login` (opens the
+deployment URL in your browser so you can copy the session token and paste
+it back into Termux), and writes `~/.ssh/config` with
 `coder config-ssh --yes --coder-binary-path "$PREFIX/bin/coder"`.
 
-You can preseed the URL or skip steps with env vars:
+You can preseed the URL, do a fully non-interactive login, or skip steps:
 
 ```sh
+# interactive: just skip the URL prompt
 CODER_URL=https://your-deployment \
+  curl -fsSL https://raw.githubusercontent.com/sabarnix/coder-termux/main/install.sh | bash
+
+# fully non-interactive (useful on CI or for reruns)
+CODER_URL=https://your-deployment \
+CODER_SESSION_TOKEN=<token-from-coder> \
   curl -fsSL https://raw.githubusercontent.com/sabarnix/coder-termux/main/install.sh | bash
 ```
 
-See `install.sh` for all knobs (`REPO`, `RELEASE_TAG`, `SKIP_LOGIN`,
-`SKIP_CONFIG_SSH`). For a reinstall after rebuilding, use
-`install/reinstall.sh`.
+See `install.sh` for all knobs (`REPO`, `RELEASE_TAG`, `CODER_URL`,
+`CODER_SESSION_TOKEN`, `SKIP_LOGIN`, `SKIP_CONFIG_SSH`). For a reinstall
+after rebuilding, use `install/reinstall.sh`.
 
 ## Usage
 

@@ -6,14 +6,30 @@ set -eu
 HOST="${1:-}"
 if [ -z "$HOST" ]; then
   echo "usage: mosh-coder <workspace-name>" >&2
+  echo "env: MOSH_REMOTE_SHELL=<cmd>  (run <cmd> inside mosh, e.g. 'tmux new -A -s wrk')" >&2
   exit 2
 fi
+command -v mosh-client >/dev/null 2>&1 || {
+  echo "mosh-client not found. Install with: pkg install mosh" >&2
+  exit 1
+}
+command -v coder >/dev/null 2>&1 || {
+  echo "coder not found on PATH. Rerun install.sh." >&2
+  exit 1
+}
 WORKSPACE="${HOST%.coder}"
 SSH_HOST="${WORKSPACE}.coder"
 
 PORT=$((60200 + RANDOM % 100))
 
-REMOTE_CMD='mosh-server new -s -p '"$PORT"' -- /home/coder/.local/bin/tmux new -A -s wrk'
+# Override MOSH_REMOTE_SHELL to launch tmux/herdr/etc. inside the mosh session.
+# Default: plain shell (mosh-server picks the user's $SHELL).
+REMOTE_SHELL="${MOSH_REMOTE_SHELL:-}"
+if [ -n "$REMOTE_SHELL" ]; then
+  REMOTE_CMD="mosh-server new -s -p $PORT -- $REMOTE_SHELL"
+else
+  REMOTE_CMD="mosh-server new -s -p $PORT"
+fi
 MOSH_OUT=$(ssh -o LogLevel=QUIET "$SSH_HOST" "$REMOTE_CMD" 2>&1) || {
   echo "mosh-server failed on $SSH_HOST:" >&2
   echo "$MOSH_OUT" >&2
